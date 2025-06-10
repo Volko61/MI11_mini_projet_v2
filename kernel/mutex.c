@@ -115,19 +115,13 @@ void m_acquire(uint8_t n) {
 
 	register MUTEX *m = &_mutex[n];
 
+	// Check si mutex bien deja créer (sinon erreur donc crash system)
 	if(m->ref_count==-1){
 		printf("Le mutex n'as pas encore été créer m_aquaire");
 		noyau_exit();
 	}
 
 	_lock_();
-	// Check si mutex bien deja créer (sinon erreur donc crash system)
-	if (m->ref_count == -1){ // supprimer redondonce 
-		_unlock_();
-		printf("Volonté d'aquérir un mutex meme pas créer");
-		noyau_exit();
-	}
-
 	// Si non libre
 	if (m->ref_count != 0){
 		// A part si on est justement le propriétaire (aucquel cas on augmente notre ref_count)
