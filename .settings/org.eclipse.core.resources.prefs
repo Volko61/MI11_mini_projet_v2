@@ -1,0 +1,9 @@
+eclipse.preferences.version=1
+encoding//hwsupport/cortex.c=UTF-8
+encoding//hwsupport/cortex.h=UTF-8
+encoding//hwsupport/vectors.S=UTF-8
+encoding//kernel/init.c=UTF-8
+encoding/<project>=UTF-8
+encoding/noyau.c=UTF-8
+encoding/noyau.h=UTF-8
+encoding/noyaufil.c=UTF-8
