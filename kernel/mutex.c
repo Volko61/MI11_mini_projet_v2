@@ -81,7 +81,8 @@ uint8_t m_create() {
 	}
 	if (n < MAX_MUTEX)
 	{
-		fifo_init(&(m->wait_queue));
+		// intiialise une file d'attente de toutes les taches cherchant à obtenir ce mutex
+		fifo_init(&(m->wait_queue)); 
 		m->ref_count = 0;
 		m->owner_id = NO_OWNER_TASK_ID;
 	}
@@ -121,7 +122,7 @@ void m_acquire(uint8_t n) {
 
 	_lock_();
 	// Check si mutex bien deja créer (sinon erreur donc crash system)
-	if (m->ref_count == -1){
+	if (m->ref_count == -1){ // supprimer redondonce 
 		_unlock_();
 		printf("Volonté d'aquérir un mutex meme pas créer");
 		noyau_exit();
@@ -130,7 +131,8 @@ void m_acquire(uint8_t n) {
 	// Si non libre
 	if (m->ref_count != 0){
 		// A part si on est justement le propriétaire (aucquel cas on augmente notre ref_count)
-		if(m->owner_id == noyau_get_tc()){
+		if(m->owner_id == noyau_get_tc()){ 
+			// si la tache courante est en possession du mutex et le reprend
 			m->ref_count++;
 
 		}else{
