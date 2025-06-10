@@ -118,48 +118,89 @@ uint8_t _timer_event = 0;          /* variable de détection d'appel SYSTICK */
  *               en cas d'erreur, le noyau doit etre arrete
  * Err. fatale: priorite erronnee, depassement du nb. maximal de taches 
  */
- uint16_t cree(TACHE_ADR adr_tache, uint16_t prio, void* arg){
+ // Doit être déclaré au niveau du fichier, avec _noyau_tcb
+// Ce tableau garde une trace du prochain index libre pour chaque niveau de priorité.
+static uint16_t _prochain_index_prio[MAX_PRIO] = {0};
 
-	uint16_t id;
-    /* pointeur d'une case de _noyau_tcb         */
-    NOYAU_TCB *p;
-    static int tache[MAX_PRIO] = {-1, -1, -1, -1, -1, -1, -1, -1};
+/**
+ * @brief Crée une nouvelle tâche dans le système.
+ *
+ * @param adr_tache Pointeur vers la fonction de la tâche.
+ * @param prio      Priorité de la tâche (0 = plus haute).
+ * @param arg       Argument à passer à la tâche.
+ * @return          L'identifiant permanent et unique de la tâche créée, ou une valeur d'erreur.
+ */
+uint16_t cree(TACHE_ADR adr_tache, uint16_t prio, void* arg) {
 
-    /* Q2.14: debut section critique */
-    _lock_();            
+    uint16_t id_permanent;    // L'ID unique de la tâche (son index dans _noyau_tcb)
+    uint16_t id_position;     // L'ID de son slot dans la file (prio | index)
+    uint16_t index_tache;     // L'index dans la file de priorité (0 à 7)
+    NOYAU_TCB *p_tcb;
 
-    id = ++tache[prio];
-    if (id > MAX_TACHES_FILE) {
-    	printf("Plus de tâches disponibles pour la priorité %d\n", prio);
-    	noyau_exit();
-    } else {
-    	id = id | prio << 3;
+    _lock_(); // Début de la section critique
+
+    // --- 1. Trouver un TCB libre pour assigner un ID permanent ---
+    for (id_permanent = 0; id_permanent < MAX_TACHES_NOYAU; id_permanent++) {
+        if (_noyau_tcb[id_permanent].status == NCREE) {
+            break; // TCB libre trouvé à l'index 'id_permanent'
+        }
     }
 
-    if (_noyau_tcb[id].status != NCREE) {
-    	printf("Tentative de créer un processus qui n'est pas dans un état non créer\n");
-    	noyau_exit();
+    // Vérifier si un TCB a été trouvé
+    if (id_permanent >= MAX_TACHES_NOYAU) {
+        printf("Erreur: Plus de TCB disponibles.\n");
+        _unlock_();
+        noyau_exit(); // Ou retourner un code d'erreur
     }
-   /* creation du contexte de la nouvelle tache */
-    p = &_noyau_tcb[id];
-    /* Q2.17 : allocation d'une pile a la tache */
-    p->sp_ini = _tos;         
-    /* Q2.18 : decrementation du pointeur de pile general, afin que la prochaine tache */
-	/* n'utilise pas la pile allouee pour la tache courante */
-    _tos -= PILE_TACHE;         
-    /* Q2.19 : memorisation de l'adresse de debut de la tache */
-    p->task_adr = adr_tache;
-    p->arg = arg;
-    /* initialisation du compteur de délai à zéro */
-    p->delay = 0;
-    /* Q2.20 : mise a jour de l'etat de la tache a CREE */
-    p->status = CREE; 
-    /* Q2.21 : fin section critique */
-    _unlock_(); 
 
-    return (id); /* tache est un uint16_t */
+    // --- 2. Allouer un slot de position dans la file de priorité demandée ---
+    if (prio >= MAX_PRIO) {
+        printf("Erreur: Priorite %d invalide.\n", prio);
+        _unlock_();
+        noyau_exit();
+    }
+
+    index_tache = _prochain_index_prio[prio]++;
+    if (index_tache >= MAX_TACHES_FILE) {
+        printf("Erreur: Plus de slots disponibles pour la priorite %d.\n", prio);
+        _unlock_();
+        noyau_exit();
+    }
+
+    // On construit l'identifiant de position
+    id_position = index_tache | (prio << 3);
+
+    // --- 3. Initialiser le TCB ---
+    p_tcb = &_noyau_tcb[id_permanent];
+
+    // Allocation de la pile
+    p_tcb->sp_ini = _tos;
+    _tos -= PILE_TACHE;
+    
+    // Vérification du débordement de pile global
+    if (_tos <= _bos) {
+        printf("Erreur: Debordement de la pile systeme.\n");
+        _unlock_();
+        noyau_exit();
+    }
+
+    // Initialisation des champs du TCB
+    p_tcb->task_adr = adr_tache;
+    p_tcb->arg = arg;
+    p_tcb->delay = 0;
+    
+    // NOUVEAU : On sauvegarde l'identifiant de position original de la tâche.
+    // C'est crucial pour savoir où la réinsérer après un `dort()` ou `delay()`.
+    p_tcb->id_position = id_position;
+
+    // La tâche est maintenant créée mais pas encore prête à être exécutée.
+    p_tcb->status = CREE;
+
+    _unlock_(); // Fin de la section critique
+
+    // On retourne l'identifiant PERMANENT de la tâche
+    return id_permanent;
 }
-
 /*
  * ajout d'une tache pouvant etre executee a la liste des taches eligibles
  * entre  : numero de la tache a ajouter

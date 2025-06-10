@@ -1,8 +1,5 @@
 /*
- * utils.c
- *
- *  Created on: 28 mai 2020
- *      Author: jdm
+ * delay.c
  */
 
 #include <stdint.h>
@@ -12,20 +9,7 @@
 #include "noyau_file_prio.h"
 #include "delay.h"
 
-/*----------------------------------------------------------------------------*
- * variables communes a toutes les procedures                                 *
- *----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*
- * fonctions de gestion des délais                                            *
- *----------------------------------------------------------------------------*/
-
-/*
- * entrée  : nombre de tick d'attente
- * sortie  : sans
- * description : renseigne le compteur de délai de la structure _contexte de la tâche courante
- * 				 endort la tâche
- */
+/* ... (fonction delay() inchangée) ... */
 void delay(uint32_t nticks){
 	uint16_t tachecourante;
 	NOYAU_TCB* p_tcb = NULL;
@@ -40,33 +24,32 @@ void delay(uint32_t nticks){
 	_unlock_();
 }
 
+
 /*
- * entrée  : sans (fonction appelée dans scheduler)
- * sortie : sans
- * description : parcours l'ensemble des contextes de tâches pour vérifier celles qui sont SUSP
- * 				 pour celles dont le compteur est non nul
- * 				 	décrémente le compteur
- * 				 	remet la tache en exécution si son compteur arrive à zéro
- *
+ * MODIFIÉ : Gère la décrémentation des délais et réveille les tâches.
  */
 void delay_process(void){
 	register uint16_t i;
-	register NOYAU_TCB* p_tcb = NULL;
+	NOYAU_TCB* p_tcb_base = noyau_get_p_tcb(0);
 
-	p_tcb = noyau_get_p_tcb(0);
-	for(i=0; i< MAX_TACHES_NOYAU; i++){
+	// Parcourt toutes les TCB possibles
+	for(i = 0; i < MAX_TACHES_NOYAU; i++){ // MAX_TACHES_NOYAU doit être défini dans le noyau
 
-		if (p_tcb[i].status == SUSP){
-			if (p_tcb[i].delay != 0){
-				p_tcb[i].delay--;
-				if (p_tcb[i].delay == 0){
-					p_tcb[i].status = EXEC;
-					file_ajoute(i);
+		// Si une tâche est suspendue (potentiellement pour un délai)
+		if (p_tcb_base[i].status == SUSP){
+			// Et si son compteur de délai est actif
+			if (p_tcb_base[i].delay > 0){
+				p_tcb_base[i].delay--;
+				// Si le délai est écoulé
+				if (p_tcb_base[i].delay == 0){
+					// La tâche redevient prête
+					p_tcb_base[i].status = PRET; // Une tâche réveillée est PRÊTE, pas en EXECUTION
+					
+					// On la ré-ajoute dans la file de l'ordonnanceur
+					// en utilisant son identifiant de position original et son ID explicite (i).
+					file_ajoute(p_tcb_base[i].id_position, i);
 				}
 			}
 		}
 	}
 }
-
-
-

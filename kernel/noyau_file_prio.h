@@ -33,7 +33,7 @@
  *----------------------------------------------------------------------------*/
 
 void file_init(void);
-void file_ajoute(uint16_t n);
+void file_ajoute(uint16_t n, uint16_t id_tache);
 void file_retire(uint16_t t);
 uint16_t file_suivant(void);
 void file_affiche_queue(void);
