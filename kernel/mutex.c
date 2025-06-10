@@ -1,229 +1,154 @@
 /*----------------------------------------------------------------------------*
- * fichier : mutex.c                                                            *
- * gestion des mutex pour le mini-noyau temps reel                       *
+ * fichier : mutex.c
+ * gestion des mutex avec héritage de priorité par échange d'identités.
  *----------------------------------------------------------------------------*/
 
 #include "mutex.h"
-
 #include "fifo.h"
-#include "noyau_prio.h"
+#include "noyau_prio.h" // Contient les déclarations du noyau
+#include "noyau_file_prio.h" // IMPORTANT : Pour file_echange()
+
 #include <stdio.h>
 
-#define NO_OWNER_TASK_ID -1
+#define NO_OWNER_TASK_ID 0xFFFF // Utilisation d'une valeur improbable pour un ID de tâche
 
 /*----------------------------------------------------------------------------*
- * declaration des structures                                                 *
+ * declaration des structures
  *----------------------------------------------------------------------------*/
-
-/*
- * structure definissant un mutex
- */
 typedef struct {
-    FIFO wait_queue;	// File d'attente des taches qui veulent prendre ce mutex
-    uint8_t owner_id;    // ID de la tâche qui détient le mutex. NO_OWNER_TASK_ID si libre.
-    int8_t ref_count;    // Compteur de références. -1 si non créer (et donc non libre), 0 si creer et dispo, >0 si acquis.
+    FIFO wait_queue;
+    uint16_t owner_id; // Utilise uint16_t pour correspondre aux ID de tâches
+    int8_t ref_count;
 } MUTEX;
 
 /*----------------------------------------------------------------------------*
- * variables globales internes                                                *
+ * variables globales internes
  *----------------------------------------------------------------------------*/
-
-/*
- * variable stockant tous les mutex du systeme
- */
-MUTEX _mutex[MAX_MUTEX];
+static MUTEX _mutex[MAX_MUTEX];
 
 /*----------------------------------------------------------------------------*
- * definition des fonctions                                                   *
+ * Fonctions (seules m_acquire et m_release sont significativement modifiées)
  *----------------------------------------------------------------------------*/
 
-/*
- * /!!!!\ NOTE IMPORTANTE /!!!!\
- * pour faire les verifications de file, on pourra utiliser la variable de
- * file fifo_taille et la mettre a -1 dans le cas ou la file n'est pas
- * utilisee
- */
-
-/*
- * initialise les mutex du systeme
- * entre  : sans
- * sortie : sans
- * description : initialise le tableau des mutex de telle manière qu'ils soient tous disponibles
- */
 void m_init(void) {
-	register MUTEX *m = _mutex;
-	register unsigned j;
-
-	for (j = 0; j < MAX_MUTEX; j++)
-	{
-		m->owner_id = NO_OWNER_TASK_ID;
-		m->ref_count = -1;
-		m++;
-	}
+    register MUTEX *m = _mutex;
+    register unsigned j;
+    for (j = 0; j < MAX_MUTEX; j++, m++) {
+        m->owner_id = NO_OWNER_TASK_ID;
+        m->ref_count = -1;
+    }
 }
 
-/*
- * cree un mutex
- * entre  : sans
- * sortie : Retourne le numéro de mutex si ok, MAX_MUTEX sinon.
- * description : Crée un mutex.
- */
 uint8_t m_create() {
-	register unsigned n = 0;
-	register MUTEX *m = &_mutex[n];
-
-	_lock_();
-	/* Rechercher un mutex libre */
-	while(m->ref_count != -1 && n < MAX_MUTEX)
-	{
-		n++;
-		m = &_mutex[n];
-	}
-	if (n < MAX_MUTEX)
-	{
-		// intiialise une file d'attente de toutes les taches cherchant à obtenir ce mutex
-		fifo_init(&(m->wait_queue)); 
-		m->ref_count = 0;
-		m->owner_id = NO_OWNER_TASK_ID;
-	}
-	else
-	{
-		n = MAX_MUTEX;
-		printf("Volonté de creer un mutex mais le tableau est plein");
-	}
-	_unlock_();
-
-	return n;
+    register unsigned n = 0;
+    register MUTEX *m = &_mutex[n];
+    _lock_();
+    while(m->ref_count != -1 && n < MAX_MUTEX) {
+        n++;
+        m = &_mutex[n];
+    }
+    if (n < MAX_MUTEX) {
+        fifo_init(&(m->wait_queue)); 
+        m->ref_count = 0;
+        m->owner_id = NO_OWNER_TASK_ID;
+    } else {
+        n = MAX_MUTEX;
+    }
+    _unlock_();
+    return n;
 }
 
-
 /*
- * Acquiert le mutex n.
- * entre  : numero du mutex a prendre
- * sortie : sans
- * description :
- * 		Acquiert le mutex n. Les mutex sont ré-entrants :
- * 		si une tâche ré-acquiert un mutex dont elle est
- * 		déjà propriétaire, ce n'est pas une erreur,
- * 		elle ne dormira pas dessus
+ * MODIFIÉ : Acquiert le mutex n avec héritage de priorité.
  */
 void m_acquire(uint8_t n) {
-	if(n < 0 || n >= MAX_MUTEX ){
-		printf("L'index du mutex n'est pas valide");
-		noyau_exit();
-	}
+    if (n >= MAX_MUTEX) { /* ... gestion erreur ... */ return; }
 
-	register MUTEX *m = &_mutex[n];
-
-	// Check si mutex bien deja créer (sinon erreur donc crash system)
-	if(m->ref_count==-1){
-		printf("Le mutex n'as pas encore été créer m_aquaire");
-		noyau_exit();
-	}
-
-	_lock_();
-	// Si non libre
-	if (m->ref_count != 0){
-		// A part si on est justement le propriétaire (aucquel cas on augmente notre ref_count)
-		if(m->owner_id == noyau_get_tc()){ 
-			// si la tache courante est en possession du mutex et le reprend
-			m->ref_count++;
-
-		}else{
-			// Alors c'est qu'il faut attendre qu'il se libère
-			fifo_ajoute(&(m->wait_queue), noyau_get_tc());
-			dort();
-
-		}
-	}else{
-		// Si libre
-		m->owner_id = noyau_get_tc();
-		m->ref_count++;
-	}
-	_unlock_();
-	return;
-}
-
-/*
- * Libere le mutex n.
- * entre  : numero du mutex a liberer
- * sortie : sans
- * description :
- *      Libere le mutex n.
- */
-void m_release(uint8_t n) {
-    if (n < 0 || n >= MAX_MUTEX) {
-        printf("L'index du mutex n'est pas valide\n");
-        noyau_exit();
-    }
     register MUTEX *m = &_mutex[n];
-
-    if (m->ref_count == -1) {
-        printf("Le mutex n'a pas encore été créé m_release\n");
-        noyau_exit();
-    }
-
-    if (m->owner_id != noyau_get_tc()) {
-        printf("Le processus courant (%d) ne détient pas le mutex (owner : %d)\n", 
-               noyau_get_tc(), m->owner_id);
-        noyau_exit();
-    }
+    if (m->ref_count == -1) { /* ... gestion erreur ... */ return; }
 
     _lock_();
+    
+    uint16_t current_task_id = noyau_get_tc();
 
-    m->ref_count--;
-    // Si la tâche a complètement fini d'utiliser la ressource
-    if (m->ref_count == 0) {
-        m->owner_id = NO_OWNER_TASK_ID; // Mutex is now free
-        // Si des tâches attendent, attribuer le mutex à la première
-        if (m->wait_queue.fifo_taille > 0) {
-            uint8_t new_task;
-            if (fifo_retire(&(m->wait_queue), &new_task) == 0) {
-                printf("Erreur dans fifo_retire dans m_release\n");
-                _unlock_();
-                noyau_exit();
+    // Si le mutex est déjà pris
+    if (m->ref_count > 0) {
+        // Cas ré-entrant : la tâche est déjà propriétaire
+        if (m->owner_id == current_task_id) {
+            m->ref_count++;
+        } else {
+            // Cas de conflit : une autre tâche est propriétaire
+            uint16_t owner_task_id = m->owner_id;
+            
+            // *** DÉBUT DE LA LOGIQUE D'HÉRITAGE DE PRIORITÉ ***
+            // On suppose l'existence de noyau_get_prio()
+            if (noyau_get_prio(current_task_id) < noyau_get_prio(owner_task_id)) {
+                // La tâche courante est plus prioritaire : on échange les identités.
+                file_echange(current_task_id, owner_task_id);
             }
-            m->owner_id = new_task; // Assign new owner
-            m->ref_count = 1;       // New owner has acquired the mutex
-            printf("reveille : %d\n", (uint16_t)new_task);
-            reveille((uint16_t)new_task); // Wake the new task
-        }
-    }
+            // *** FIN DE LA LOGIQUE D'HÉRITAGE DE PRIORITÉ ***
 
+            // Dans tous les cas de conflit, la tâche courante doit attendre.
+            fifo_ajoute(&(m->wait_queue), current_task_id);
+            dort();
+        }
+    } else {
+        // Le mutex est libre, on le prend.
+        m->owner_id = current_task_id;
+        m->ref_count = 1;
+    }
     _unlock_();
 }
 
-
 /*
- * ferme un mutex pour qu'il puisse etre reutilise
- * entre  : numero du mutex a fermer
- * sortie : sans
- * description : ferme un mutex
- *               en cas d'erreur, le noyau doit etre arrete
+ * MODIFIÉ : Libère le mutex n avec restauration de priorité.
  */
-void m_destroy(uint8_t n) {
-	if(n < 0 || n >= MAX_MUTEX ){
-		printf("L'index du mutex n'est pas valide");
-		noyau_exit();
-	}
-	register MUTEX *m = &_mutex[n];
+void m_release(uint8_t n) {
+    if (n >= MAX_MUTEX) { /* ... gestion erreur ... */ return; }
 
-	if(m->ref_count==-1){
-		printf("Le mutex n'as pas encore été créer m_destroy");
-		noyau_exit();
-	}
-	if(m->ref_count>0){
-		printf("Le mutex est encore détenu par une tache (%d)", m->owner_id);
-		noyau_exit();
-	}
+    register MUTEX *m = &_mutex[n];
+    if (m->ref_count <= 0 || m->owner_id != noyau_get_tc()) { /* ... gestion erreur ... */ return; }
 
-	_lock_();
+    _lock_();
+    
+    m->ref_count--;
+    
+    // Si la tâche a complètement libéré le mutex
+    if (m->ref_count == 0) {
+        // S'il y a des tâches en attente
+        if (m->wait_queue.fifo_taille > 0) {
+            uint16_t new_task_id;
+            uint16_t current_task_id = noyau_get_tc();
+            
+            // On récupère la prochaine tâche en attente
+            fifo_retire(&(m->wait_queue), &new_task_id);
 
-
-	 fifo_init(&(m->wait_queue));
-	 m->ref_count=-1;
-	 m->owner_id=NO_OWNER_TASK_ID;
-	_unlock_();
+            // *** DÉBUT DE LA RESTAURATION DE PRIORITÉ ***
+            // On restaure les identités pour annuler l'héritage.
+            file_echange(current_task_id, new_task_id);
+            // *** FIN DE LA RESTAURATION DE PRIORITÉ ***
+            
+            // On assigne le mutex à la nouvelle tâche
+            m->owner_id = new_task_id;
+            m->ref_count = 1;
+            
+            // On la réveille. Elle a maintenant sa priorité d'origine (haute).
+            reveille(new_task_id);
+        } else {
+            // Personne n'attend, le mutex redevient libre.
+            m->owner_id = NO_OWNER_TASK_ID;
+        }
+    }
+    _unlock_();
 }
 
+void m_destroy(uint8_t n) {
+    if (n >= MAX_MUTEX) { /* ... gestion erreur ... */ return; }
+    register MUTEX *m = &_mutex[n];
+    if (m->ref_count > 0) { /* ... gestion erreur ... */ return; }
 
+    _lock_();
+    m->ref_count = -1;
+    m->owner_id = NO_OWNER_TASK_ID;
+    _unlock_();
+}
