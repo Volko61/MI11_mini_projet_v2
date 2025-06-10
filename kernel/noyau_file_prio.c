@@ -9,6 +9,8 @@
 #include "noyau_file_prio.h"
 // recuperation du bon fichier selon l'architecture pour la fonction printf
 #include "../io/serialio.h"
+#define NO_ID -1
+#define NO_PRIO -1
 
 
 /*----------------------------------------------------------------------------*
@@ -29,6 +31,14 @@ static uint16_t _file[MAX_PRIO][MAX_TACHES_FILE];
  */
 static uint16_t _queue[MAX_TACHES_FILE];
 
+
+typedef struct {
+    uint16_t id;       // Identifiant de la tâche
+    uint16_t priority; // Priorité de la tâche
+} TASK_IDENTITY;
+
+TASK_IDENTITY task_identity[MAX_TACHES_NOYAU];
+
 /*
  * initialise la file
  * entre  : sans
@@ -41,6 +51,11 @@ void file_init(void) {
 	for (i=0; i<MAX_TACHES_FILE; i++) {
 		_queue[i] = F_VIDE;
 	}
+	for (i=0; i<MAX_TACHES_NOYAU; i++) {
+		task_identity[i].id = NO_ID;
+		task_identity[i].priority = NO_PRIO;
+	}
+
 }
 
 /*
@@ -154,4 +169,23 @@ void file_affiche() {
 		}
 		printf("\n");
     }
+}
+
+void file_echange(uint16_t id1, uint16_t id2) {
+	uint16_t index1, index2 = -1;
+	for (int i=0; i<MAX_TACHES_NOYAU; i++) {
+		if(task_identity[i].id == id1) {
+			index1 = i;
+		} 
+		if (task_identity[i].id == id2) {
+			index2 = i;
+		}
+	}
+
+	if (index1 == -1 || index2 == -1) {
+		printf("Erreur dans file_echange : une des taches n'existe pas\n");
+		return;
+	}
+	task_identity[index1].id = id2;
+	task_identity[index2].id = id1;
 }

@@ -118,5 +118,3 @@ uint16_t 	noyau_get_tc(void);
 NOYAU_TCB* 	noyau_get_p_tcb(uint16_t tcb_nb);
 
 #endif
-
-

@@ -38,6 +38,7 @@ void file_retire(uint16_t t);
 uint16_t file_suivant(void);
 void file_affiche_queue(void);
 void file_affiche(void);
+void file_echange(uint16_t id1, uint16_t id2); 
 
 
 #endif //__NOYAU_FILE_H__
