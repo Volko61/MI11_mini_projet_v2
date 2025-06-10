@@ -153,48 +153,48 @@ void m_acquire(uint8_t n) {
  * entre  : numero du mutex a liberer
  * sortie : sans
  * description :
- * 		Libere le mutex n.
+ *      Libere le mutex n.
  */
 void m_release(uint8_t n) {
-	if(n < 0 || n >= MAX_MUTEX ){
-		printf("L'index du mutex n'est pas valide");
-		noyau_exit();
-	}
-	register MUTEX *m = &_mutex[n];
-	uint8_t* new_task;
+    if (n < 0 || n >= MAX_MUTEX) {
+        printf("L'index du mutex n'est pas valide\n");
+        noyau_exit();
+    }
+    register MUTEX *m = &_mutex[n];
 
-	if(m->ref_count==-1){
-		printf("Le mutex n'as pas encore été créer m_release");
-		noyau_exit();
-	}
+    if (m->ref_count == -1) {
+        printf("Le mutex n'a pas encore été créé m_release\n");
+        noyau_exit();
+    }
 
-	if(m->owner_id!=noyau_get_tc()){
-		printf("Le processus courant (%d) ne détient pas le mutex (owner : %d)", noyau_get_tc(), m->owner_id);
-		noyau_exit();
-	}
+    if (m->owner_id != noyau_get_tc()) {
+        printf("Le processus courant (%d) ne détient pas le mutex (owner : %d)\n", 
+               noyau_get_tc(), m->owner_id);
+        noyau_exit();
+    }
 
+    _lock_();
 
-	_lock_();
+    m->ref_count--;
+    // Si la tâche a complètement fini d'utiliser la ressource
+    if (m->ref_count == 0) {
+        m->owner_id = NO_OWNER_TASK_ID; // Mutex is now free
+        // Si des tâches attendent, attribuer le mutex à la première
+        if (m->wait_queue.fifo_taille > 0) {
+            uint8_t new_task;
+            if (fifo_retire(&(m->wait_queue), &new_task) == 0) {
+                printf("Erreur dans fifo_retire dans m_release\n");
+                _unlock_();
+                noyau_exit();
+            }
+            m->owner_id = new_task; // Assign new owner
+            m->ref_count = 1;       // New owner has acquired the mutex
+            printf("reveille : %d\n", (uint16_t)new_task);
+            reveille((uint16_t)new_task); // Wake the new task
+        }
+    }
 
-	m->ref_count--;
-	// Si la tache a completement fini d'utiliser la ressource
-	if(m->ref_count == 0){
-		// Si il y a des taches en attente à lancer
-		if(m->wait_queue.fifo_taille > 0){
-			if(fifo_retire(&(m->wait_queue), new_task)== 0) {
-				printf("Erreur du fifo_retire de m_relase: possible que ce soit Tache suivant peut etre indisponible");
-				m->owner_id = NO_OWNER_TASK_ID;
-			}else{
-				m->owner_id = *new_task;
-				m->ref_count = 0;
-				printf("reveille : %d\n", (uint16_t) *new_task);
-				printf("reveille : %d\n", *new_task);
-				reveille((uint16_t) *new_task);
-			}
-		}
-	}
-
-	_unlock_();
+    _unlock_();
 }
 
 
