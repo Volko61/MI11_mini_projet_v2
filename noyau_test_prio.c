@@ -54,7 +54,8 @@ int main()
 	usart_init(115200);
 	CLEAR_SCREEN(1);
     puts("Test noyau");
+    puts("CESTPASGOOD");
     puts("Noyau preemptif");
-	start(tachedefond);
+	//start(tachedefond);
   return(0);
 }

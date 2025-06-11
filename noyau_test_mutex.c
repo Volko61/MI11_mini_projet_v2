@@ -96,8 +96,12 @@ int main()
 {
 	usart_init(115200);
 	CLEAR_SCREEN(1);
-    puts("Test noyau");
+	printf("KK");
+	puts("PROUTV3");
+	puts("Test noyau");
     puts("Noyau preemptif");
+    puts("dd");
+
     m_init();
     mutex = m_create();
 	start(tachedefond);

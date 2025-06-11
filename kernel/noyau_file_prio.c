@@ -22,6 +22,8 @@
  */
 static uint16_t _file[MAX_PRIO][MAX_TACHES_FILE];
 
+static uint16_t _id[MAX_PRIO][MAX_TACHES_FILE];
+
 /*
  * index de queue
  * valeur de l'index de la tache en cours d'execution
@@ -40,6 +42,10 @@ void file_init(void) {
 
 	for (i=0; i<MAX_TACHES_FILE; i++) {
 		_queue[i] = F_VIDE;
+		for (int j = 0; j < MAX_TACHES_FILE; j++) {
+            _file[i][j] = F_VIDE;
+            _id[i][j] = F_VIDE; 
+        }
 	}
 }
 
@@ -56,10 +62,13 @@ void file_ajoute(uint16_t n) {
 	num_t = n & 7;
 	q = &_queue[num_file];
 	f = &_file[num_file][0];
+	uint16_t *id = &_id[num_file][0];
     if (*q == F_VIDE) {
         f[num_t] = num_t;
+		id[num_t] = n;
     } else {
-        f[num_t] = f[*q];
+		f[num_t] = f[*q];
+		id[num_t] = n;
         f[*q] = num_t;
     }
 
@@ -74,27 +83,30 @@ void file_ajoute(uint16_t n) {
                  modifie
  */
 void file_retire(uint16_t t) {
-	uint16_t num_file, num_t, *q, *f;
+    uint16_t num_file = t >> 3;
+    uint16_t num_t = t & 7;
+    uint16_t *q = &_queue[num_file];
+    uint16_t *f = &_file[num_file][0];
+    uint16_t *id = &_id[num_file][0];
 
-	num_file = t >> 3;
-	num_t    = t & 7;
-	q = &_queue[num_file];
-	f = &_file[num_file][0];
+    if (*q == F_VIDE) {
+        return; // File vide, rien à faire
+    }
 
-    if (*q == (f[*q])) {
-        *q = F_VIDE;
+    if (*q == num_t) {
+        *q = f[*q];
+        id[num_t] = F_VIDE; // Effacer l'identifiant
+        if (*q == num_t) {
+            *q = F_VIDE; // Dernière tâche retirée
+        }
     } else {
-        if (num_t == *q) {
-            *q = f[*q];
-            while (f[*q] != num_t) {
-                *q = f[*q];
-            }
-            f[*q] = f[num_t];
-        } else {
-            while (f[*q] != num_t) {
-                *q = f[*q];
-            }
-            f[*q] = f[f[*q]];
+        uint16_t prev = *q;
+        while (f[prev] != num_t && f[prev] != F_VIDE) {
+            prev = f[prev];
+        }
+        if (f[prev] == num_t) {
+            f[prev] = f[num_t];
+            id[num_t] = F_VIDE; // Effacer l'identifiant
         }
     }
 }
@@ -106,18 +118,15 @@ void file_retire(uint16_t t) {
  * description : queue pointe sur la tache suivante
  */
 uint16_t file_suivant(void) {
-	uint16_t prio;
-	uint16_t id;
-
-	for (prio = 0; prio < MAX_TACHES_FILE; ++prio) {
-		if (_queue[prio] != F_VIDE) {
-			id = _file[prio][_queue[prio]];
-			_queue[prio] = id;
-			return (id | prio << 3);
-		}
-	}
-
-    return (MAX_TACHES_NOYAU);
+    uint16_t prio;
+    for (prio = 0; prio < MAX_PRIO; ++prio) {
+        if (_queue[prio] != F_VIDE) {
+            uint16_t id = _id[prio][_queue[prio]];
+			_queue[prio] = _file[prio][_queue[prio]];
+            return id; // Retourner l'identifiant explicite
+        }
+    }
+    return MAX_TACHES_NOYAU;
 }
 
 /*
@@ -140,18 +149,37 @@ void file_affiche_queue() {
  * description : affiche les valeurs de la file
  */
 void file_affiche() {
-	uint16_t i,j;
-
-    for (j=0; j < MAX_TACHES_FILE; j++){
-		printf("Tache   | ");
-		for (i = 0; i < MAX_TACHES_FILE; i++) {
-			printf("%03d | ", i);
-		}
-
-		printf("\nSuivant | ");
-		for (i = 0; i < MAX_TACHES_FILE; i++) {
-			printf("%03d | ", _file[j][i]);
-		}
-		printf("\n");
+    uint16_t i, j;
+    for (j = 0; j < MAX_PRIO; j++) {
+        printf("Priorité %d\n", j);
+        printf("Tache   | ");
+        for (i = 0; i < MAX_TACHES_FILE; i++) {
+            printf("%03d | ", i);
+        }
+        printf("\nSuivant | ");
+        for (i = 0; i < MAX_TACHES_FILE; i++) {
+            printf("%03d | ", _file[j][i]);
+        }
+        printf("\nID      | ");
+        for (i = 0; i < MAX_TACHES_FILE; i++) {
+            printf("%03d | ", _id[j][i]);
+        }
+        printf("\n\n");
     }
+}
+
+
+void file_echange(uint16_t id1, uint16_t id2) {
+    uint16_t prio1 = id1 >> 3;
+    uint16_t num_t1 = id1 & 7;
+    uint16_t prio2 = id2 >> 3;
+    uint16_t num_t2 = id2 & 7;
+
+    uint16_t *id_prio1 = &_id[prio1][0];
+    uint16_t *id_prio2 = &_id[prio2][0];
+
+    // Échanger les identifiants dans les tableaux _id
+    uint16_t temp = id_prio1[num_t1];
+    id_prio1[num_t1] = id_prio2[num_t2];
+    id_prio2[num_t2] = temp;
 }
