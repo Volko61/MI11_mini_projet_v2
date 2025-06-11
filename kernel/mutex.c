@@ -5,7 +5,7 @@
 
 #include "mutex.h"
 #include "fifo.h"
-#include "noyau_prio.h"
+#include "noyau_prio.h" // Doit contenir les déclarations pour les fonctions noyau_
 #include <stdio.h>
 
 #define NO_OWNER_TASK_ID 0xFFFF
@@ -17,7 +17,10 @@
 typedef struct {
     FIFO wait_queue;    // File d'attente des tâches en attente
     uint16_t owner_id;  // ID de la tâche propriétaire
-    int8_t ref_count;   // Compteur de références
+    int8_t ref_count;   // Compteur de références (pour mutex récursif)
+    // Pour l'héritage de priorité, il serait utile de stocker la priorité d'origine
+    // du propriétaire si elle a été augmentée, ou de gérer cela dans le TCB.
+    // priority_t owner_original_priority; // Exemple
 } MUTEX;
 
 /*----------------------------------------------------------------------------*
@@ -37,224 +40,169 @@ void m_init(void) {
     for (j = 0; j < MAX_MUTEX; j++) {
         fifo_init(&(m->wait_queue));
         m->owner_id = NO_OWNER_TASK_ID;
-        m->ref_count = -1;
+        m->ref_count = -1; // Marque le mutex comme non créé/disponible
         m++;
     }
 }
 
 uint8_t m_create(void) {
     register unsigned n = 0;
-    register MUTEX *m = &_mutex[n];
+    register MUTEX *m = &_mutex[n]; // Pointeur vers le premier mutex
 
-    _lock_();
-    while (m->ref_count != -1 && n < MAX_MUTEX) {
+    _lock_(); // Début de la section critique
+    while (n < MAX_MUTEX && m->ref_count != -1) { // Cherche un mutex non utilisé
         n++;
-        m = &_mutex[n];
+        if (n < MAX_MUTEX) { // Évite de déborder si tous les mutex sont utilisés
+             m = &_mutex[n];
+        }
     }
+
     if (n < MAX_MUTEX) {
-        fifo_init(&(m->wait_queue));
-        m->ref_count = 0;
+        // fifo_init(&(m->wait_queue)); // Déjà fait dans m_init, mais peut être réaffirmé
+        m->ref_count = 0;          // Créé, mais pas encore détenu
         m->owner_id = NO_OWNER_TASK_ID;
     } else {
         printf("Erreur : aucun mutex disponible\n");
-        n = MAX_MUTEX;
+        n = MAX_MUTEX; // Valeur d'erreur indiquant qu'aucun mutex n'a été créé
     }
-    _unlock_();
-    return n;
+    _unlock_(); // Fin de la section critique
+    return (uint8_t)n; // n sera MAX_MUTEX en cas d'erreur
 }
 
 void m_acquire(uint8_t n) {
     if (n >= MAX_MUTEX) {
-        printf("Erreur : index de mutex invalide (%d)\n", n);
-        noyau_exit();
+        printf("Erreur : index de mutex invalide (%d) lors de acquire\n", n);
+        noyau_exit(); // Ou une autre gestion d'erreur
     }
 
     register MUTEX *m = &_mutex[n];
     if (m->ref_count == -1) {
-        printf("Erreur : mutex %d non créé\n", n);
+        printf("Erreur : mutex %d non créé lors de acquire\n", n);
         noyau_exit();
     }
 
     _lock_();
-    uint16_t tc = noyau_get_tc();
-    
-    // Vérifier que l'ID de la tâche est valide
-    if (tc >= MAX_MUTEX * 8) {
-        printf("Erreur : ID de tâche invalide: %d\n", tc);
-        _unlock_();
-        noyau_exit();
-    }
-    
-    if (m->owner_id == NO_OWNER_TASK_ID) {
-        // Mutex libre, on l'acquiert
-        m->owner_id = tc;
+    uint16_t current_task_id = noyau_get_tc();
+
+    if (m->owner_id == NO_OWNER_TASK_ID) { // Mutex libre
+        m->owner_id = current_task_id;
         m->ref_count = 1;
-    } else if (m->owner_id == tc) {
-        // Réentrance : même tâche qui veut acquérir le mutex
+        // Si on stocke la priorité d'origine pour PIP :
+        // m->owner_original_priority = noyau_get_task_priority(current_task_id);
+    } else if (m->owner_id == current_task_id) { // Acquisition récursive par le propriétaire
         m->ref_count++;
-    } else {
-        // Mutex détenu par une autre tâche
-        uint16_t prio_tc = tc >> 3;
-        uint16_t prio_owner = m->owner_id >> 3;
-        
-        // Vérifier l'état de la FIFO avant d'ajouter
-        if (m->wait_queue.fifo_taille >= MAX_MUTEX) {
-            printf("Erreur : FIFO pleine pour le mutex %d\n", n);
-            _unlock_();
-            noyau_exit();
+    } else { // Mutex détenu par une autre tâche
+        // Logique d'héritage de priorité (PIP)
+        // On suppose que noyau_get_task_priority retourne la priorité effective
+        // et que plus la valeur est petite, plus la priorité est haute.
+        priority_t current_task_prio = noyau_get_task_priority(current_task_id);
+        priority_t owner_task_prio = noyau_get_task_priority(m->owner_id);
+
+        if (current_task_prio < owner_task_prio) {
+            // La tâche courante est plus prioritaire que le propriétaire du mutex.
+            // Il faut élever la priorité du propriétaire.
+            noyau_promote_task_priority(m->owner_id, current_task_prio);
+            // La fonction noyau_promote_task_priority devrait sauvegarder l'ancienne
+            // priorité du m->owner_id et le replacer correctement dans la file des tâches prêtes si besoin.
         }
-        
-        // Ajouter la tâche courante à la file d'attente
-        if (fifo_ajoute(&(m->wait_queue), tc) != 0) {
-            printf("Erreur : échec de fifo_ajoute pour le mutex %d\n", n);
-            _unlock_();
-            noyau_exit();
-        }
-        
-        if (prio_tc < prio_owner) {
-            // Inversion de priorité : la tâche courante a une priorité plus haute
-            // On échange les priorités (héritage de priorité)
-            file_echange(tc, m->owner_id);
-            
-            // Suspendre la tâche courante
-            noyau_get_p_tcb(tc)->status = SUSP; 
-            
-            // Retirer le propriétaire de la file prête et le remettre avec nouvelle priorité
-            file_retire(m->owner_id);
-            file_ajoute(m->owner_id); // Ajout avec priorité héritée
-            
-            // Déclencher l'ordonnancement
-            schedule();
-        } else {
-            // Pas d'inversion de priorité, on endort simplement la tâche
-            dort();
-        }
+
+        // La tâche courante doit attendre
+        fifo_ajoute(&(m->wait_queue), current_task_id);
+        // noyau_set_status(current_task_id, SUSP); // Alternative
+        noyau_get_p_tcb(current_task_id)->status = SUSP;
+        schedule(); // Le scheduler choisira la tâche la plus prioritaire (potentiellement le propriétaire avec sa priorité élevée)
+                    // Si dort() fait SUSP + schedule, on peut utiliser dort() ici.
+                    // dort();
     }
     _unlock_();
 }
 
 void m_release(uint8_t n) {
     if (n >= MAX_MUTEX) {
-        printf("Erreur : index de mutex invalide (%d)\n", n);
+        printf("Erreur : index de mutex invalide (%d) lors de release\n", n);
         noyau_exit();
     }
 
     register MUTEX *m = &_mutex[n];
     if (m->ref_count == -1) {
-        printf("Erreur : mutex %d non créé\n", n);
+        printf("Erreur : mutex %d non créé lors de release\n", n);
         noyau_exit();
     }
-    if (m->owner_id != noyau_get_tc()) {
-        printf("Erreur : la tâche %d ne détient pas le mutex %d (propriétaire : %d)\n",
-               noyau_get_tc(), n, m->owner_id);
+
+    uint16_t current_task_id = noyau_get_tc();
+    if (m->owner_id != current_task_id) {
+        printf("Erreur : la tâche %d tente de relâcher le mutex %d non détenu (propriétaire : %d)\n",
+               current_task_id, n, m->owner_id);
         noyau_exit();
     }
 
     _lock_();
     m->ref_count--;
-    if (m->ref_count == 0) {
-        // Plus de références, on libère le mutex
-        uint16_t tc = noyau_get_tc();
-        uint16_t next_task = NO_OWNER_TASK_ID;
-        
-        // Vérifier s'il y a des tâches en attente
-        if (m->wait_queue.fifo_taille > 0) {
-            // Debug : afficher l'état de la FIFO
-            printf("Debug: FIFO taille=%d avant fifo_retire\n", m->wait_queue.fifo_taille);
-            
-            // Vérifier la cohérence de base de la FIFO
-            if (m->wait_queue.fifo_taille > MAX_MUTEX || m->wait_queue.fifo_taille < 0) {
-                printf("Erreur : FIFO corrompue pour le mutex %d (taille=%d)\n", n, m->wait_queue.fifo_taille);
-                // En cas de corruption, on remet le mutex en état libre
-                m->owner_id = NO_OWNER_TASK_ID;
-                fifo_init(&(m->wait_queue)); // Réinitialiser la FIFO
-                _unlock_();
-                return;
+
+    if (m->ref_count == 0) { // Dernière libération (pour les mutex récursifs)
+        // Avant de potentiellement céder le mutex, restaurer la priorité de la tâche courante
+        // si elle avait été modifiée à cause de l'héritage de priorité lié à CE mutex.
+        // Cela suppose que noyau_restore_task_priority sait quelle était la priorité d'origine
+        // ou la recalcule en fonction des autres mutex que la tâche pourrait détenir.
+        noyau_restore_task_priority(current_task_id); // Doit être implémenté dans le noyau
+
+        if (m->wait_queue.fifo_taille > 0) { // Y a-t-il des tâches en attente ?
+            uint16_t next_owner_id;
+            if (fifo_retire(&(m->wait_queue), &next_owner_id) != 0) { // 0 pour succès
+                printf("Erreur : échec de fifo_retire pour le mutex %d\n", n);
+                _unlock_(); // Important avant noyau_exit
+                noyau_exit();
             }
-            
-            // Essayer de retirer un élément de la FIFO
-            int result = fifo_retire(&(m->wait_queue), &next_task);
-            if (result != 0) {
-                printf("Erreur : échec de fifo_retire pour le mutex %d (code: %d)\n", n, result);
-                printf("  - FIFO: taille=%d\n", m->wait_queue.fifo_taille);
-                
-                // Stratégie de récupération : réinitialiser la FIFO et libérer le mutex
-                printf("Récupération : réinitialisation de la FIFO du mutex %d\n", n);
-                fifo_init(&(m->wait_queue));
-                m->owner_id = NO_OWNER_TASK_ID;
-                _unlock_();
-                return;
-            }
-            
-            printf("Debug: Tâche %d récupérée de la FIFO\n", next_task);
-            
-            // Vérifier que la tâche récupérée est valide
-            if (next_task == NO_OWNER_TASK_ID || next_task >= MAX_MUTEX * 8) {
-                printf("Erreur : tâche invalide récupérée de la FIFO: %d\n", next_task);
-                // Continuer avec la libération du mutex
-                m->owner_id = NO_OWNER_TASK_ID;
-                _unlock_();
-                return;
-            }
-            
-            // Calculer les priorités
-            uint16_t prio_tc = tc >> 3;
-            uint16_t prio_next = next_task >> 3;
-            
-            // Donner le mutex à la prochaine tâche
-            m->owner_id = next_task;
-            m->ref_count = 1;
-            
-            printf("Debug: Mutex %d transféré à la tâche %d\n", n, next_task);
-            
-            // Réveiller la tâche qui obtient le mutex
-            reveille(next_task);
-            
-            // Si la tâche qui obtient le mutex a une priorité plus haute,
-            // déclencher l'ordonnancement
-            if (prio_next < prio_tc) {
-                // Remettre la tâche courante dans la file avec sa priorité originale
-                file_retire(tc);
-                file_ajoute(tc);
-                schedule();
-            }
-        } else {
-            // Aucune tâche en attente, le mutex devient libre
-            printf("Debug: Mutex %d libéré (aucune tâche en attente)\n", n);
+            m->owner_id = next_owner_id;
+            m->ref_count = 1; // Le nouveau propriétaire l'a acquis une fois
+            // Si on stocke la priorité d'origine pour PIP dans le mutex :
+            // m->owner_original_priority = noyau_get_task_priority(next_owner_id);
+
+            // La tâche next_owner_id pourrait elle-même avoir besoin d'un boost de priorité
+            // si une tâche de plus haute priorité attend un autre mutex qu'elle détient.
+            // Pour l'instant, on la réveille simplement. Le mécanisme PIP s'appliquera
+            // si next_owner_id essaie d'acquérir un autre mutex ou si une autre tâche
+            // essaie d'acquérir un mutex détenu par next_owner_id.
+            reveille(next_owner_id); // Rend la tâche prête et appelle schedule si nécessaire
+        } else { // Personne n'attend
             m->owner_id = NO_OWNER_TASK_ID;
         }
-    } else {
-        printf("Debug: Mutex %d: ref_count décrementé à %d\n", n, m->ref_count);
+        // Un schedule() peut être nécessaire ici si reveille() ne le fait pas
+        // ou si la restauration de priorité a changé l'ordonnancement.
+        // schedule(); // A évaluer en fonction de l'implémentation de reveille et noyau_restore_task_priority
     }
     _unlock_();
 }
 
 void m_destroy(uint8_t n) {
     if (n >= MAX_MUTEX) {
-        printf("Erreur : index de mutex invalide (%d)\n", n);
+        printf("Erreur : index de mutex invalide (%d) lors de destroy\n", n);
         noyau_exit();
     }
 
     register MUTEX *m = &_mutex[n];
+    _lock_(); // Section critique pour vérifier et modifier le mutex
+
     if (m->ref_count == -1) {
-        printf("Erreur : mutex %d non créé\n", n);
-        noyau_exit();
-    }
-    if (m->ref_count > 0) {
-        printf("Erreur : le mutex %d est détenu par la tâche %d\n", n, m->owner_id);
-        noyau_exit();
-    }
-    
-    _lock_();
-    // Vérifier qu'il n'y a pas de tâches en attente
-    if (m->wait_queue.fifo_taille > 0) {
-        printf("Erreur : le mutex %d a encore des tâches en attente\n", n);
         _unlock_();
+        printf("Erreur : mutex %d non créé lors de destroy\n", n);
         noyau_exit();
     }
-    
-    // Réinitialiser le mutex
-    fifo_init(&(m->wait_queue));
+    if (m->ref_count > 0) { // Ou m->owner_id != NO_OWNER_TASK_ID
+        _unlock_();
+        printf("Erreur : le mutex %d est détenu par la tâche %d et ne peut être détruit\n", n, m->owner_id);
+        noyau_exit();
+    }
+    if (m->wait_queue.fifo_taille > 0) {
+        _unlock_();
+        // C'est un problème : des tâches attendent un mutex qui va être détruit.
+        // Idéalement, il faudrait les réveiller avec un code d'erreur.
+        printf("Erreur : des tâches attendent le mutex %d qui va être détruit. Destruction annulée.\n", n);
+        noyau_exit(); // Ou retourner un code d'erreur
+    }
+
+    // Réinitialiser le mutex pour qu'il puisse être recréé
+    fifo_init(&(m->wait_queue)); // Vider la file d'attente (devrait déjà être vide)
     m->ref_count = -1;
     m->owner_id = NO_OWNER_TASK_ID;
     _unlock_();
