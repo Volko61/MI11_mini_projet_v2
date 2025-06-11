@@ -88,7 +88,8 @@ void m_acquire(uint8_t n) {
         if (prio_tc < prio_owner) {
             file_echange(tc, m->owner_id);
             fifo_ajoute(&(m->wait_queue), tc);
-            noyau_set_status(tc, SUSP);
+            //noyau_set_status(tc, SUSP);
+            noyau_get_p_tcb(tc)->status = SUSP; 
             file_retire(m->owner_id);
             schedule();
         } else {
