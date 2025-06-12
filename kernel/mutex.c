@@ -69,7 +69,7 @@ void m_acquire(uint8_t n) {
         noyau_exit();
     }
 
-    register MUTEX *m = &_mutex[n];
+    register MUTEX *m = &_mutex[n]; // accède au mutex demandé dans le tableau des mutexs
     if (m->ref_count == -1) {
         printf("Erreur : mutex %d non créé\n", n);
         noyau_exit();
@@ -86,11 +86,13 @@ void m_acquire(uint8_t n) {
         uint16_t prio_tc = tc >> 3;
         uint16_t prio_owner = m->owner_id >> 3;
         if (prio_tc < prio_owner) {
+        // if (prio_tc > prio_owner) { 
+            // la tache en attentente du mutex a une priorité supérieur
             file_echange(tc, m->owner_id);
-            fifo_ajoute(&(m->wait_queue), tc);
+            fifo_ajoute(&(m->wait_queue), tc); // met la tache demandant en attente
             //noyau_set_status(tc, SUSP);
-            noyau_get_p_tcb(tc)->status = SUSP; 
-            file_retire(m->owner_id);
+            noyau_get_p_tcb(tc)->status = SUSP;  // pk pas 
+            file_retire(m->owner_id); 
             schedule();
         } else {
             fifo_ajoute(&(m->wait_queue), tc);
@@ -129,8 +131,14 @@ void m_release(uint8_t n) {
                 noyau_exit();
             }
             uint16_t prio_tc = tc >> 3;
+            uint16_t num_tc = tc & 7;
+
             uint16_t prio_next = next_task >> 3;
-            if (prio_tc < prio_next) {
+            uint16_t num_next = tc & 7;
+
+            // if (prio_tc < prio_next) {
+            if ((_id[prio_tc][num_tc] == next_task )&&(_id[prio_next][num_next] == tc)){
+
                 file_echange(tc, next_task);
             }
             m->owner_id = next_task;
