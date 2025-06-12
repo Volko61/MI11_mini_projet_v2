@@ -127,6 +127,8 @@ void m_release(uint8_t n) {
         uint16_t next_task = NO_OWNER_TASK_ID;
         if (m->wait_queue.fifo_taille > 0) {
             if (fifo_retire(&(m->wait_queue), &next_task) == 0) {
+                 printf("Valeur : %u\n", m->wait_queue);
+                printf("je rentre dans la condition");
                 printf("Erreur : échec de fifo_retire pour le mutex %d\n", n);
                 _unlock_();
                 noyau_exit();
