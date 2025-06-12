@@ -9,8 +9,6 @@
 #include "noyau_file_prio.h"
 // recuperation du bon fichier selon l'architecture pour la fonction printf
 #include "../io/serialio.h"
-#define NO_ID -1
-#define NO_PRIO -1
 
 
 /*----------------------------------------------------------------------------*
@@ -22,7 +20,8 @@
  * indice = numero de tache
  * valeur = tache suivante
  */
-static uint16_t _file[MAX_PRIO][MAX_TACHES_FILE];
+static uint16_t _file[MAX_PRIO][MAX_TACHES_FILE]; 
+static uint16_t _id[MAX_PRIO][MAX_TACHES_FILE];
 
 /*
  * index de queue
@@ -31,13 +30,29 @@ static uint16_t _file[MAX_PRIO][MAX_TACHES_FILE];
  */
 static uint16_t _queue[MAX_TACHES_FILE];
 
+/*
+ * echange les ids de deux taches dans la file d'odonnanceur
+ * entre  : id1 numero de la tache a echanger
+ *          id2 numero de la tache avec laquelle on echange
+ * sortie : sans
+ * description : echange les taches id1 et id2 dans la file
+ */
+void file_echange(uint16_t id1, uint16_t id2){
+	if((id1 >= MAX_TACHES_FILE || id2 >= MAX_TACHES_FILE)||(id1 < 0 || id2 < 0)){
+		printf("Erreur : l'index de la tache n'est pas valide dans file_echange\n");
+		return;
+	}
+	int num_file_id1 = id1 >> 3;
+	int num_t_id1    = id1 & 7;
 
-typedef struct {
-    uint16_t id;       // Identifiant de la tâche
-    uint16_t priority; // Priorité de la tâche
-} TASK_IDENTITY;
+	int num_file_id2 = id2 >> 3;
+	int num_t_id2    = id2 & 7;
 
-TASK_IDENTITY task_identity[MAX_TACHES_NOYAU];
+	_id[num_file_id1][num_t_id1] = id2; // on echange les ids
+	_id[num_file_id2][num_t_id2] = id1;
+
+	return; 
+}
 
 /*
  * initialise la file
@@ -51,11 +66,6 @@ void file_init(void) {
 	for (i=0; i<MAX_TACHES_FILE; i++) {
 		_queue[i] = F_VIDE;
 	}
-	for (i=0; i<MAX_TACHES_NOYAU; i++) {
-		task_identity[i].id = NO_ID;
-		task_identity[i].priority = NO_PRIO;
-	}
-
 }
 
 /*
@@ -66,7 +76,7 @@ void file_init(void) {
  */
 void file_ajoute(uint16_t n) {
 	uint16_t num_file, num_t, *q, *f;
-
+// coupe id global en deux parties prio + id
 	num_file = (n >> 3);
 	num_t = n & 7;
 	q = &_queue[num_file];
@@ -77,6 +87,7 @@ void file_ajoute(uint16_t n) {
         f[num_t] = f[*q];
         f[*q] = num_t;
     }
+		_id[num_file][num_t] = n; // on stocke l'id de la tache dans le tableau id
 
     *q = num_t;
 }
@@ -126,9 +137,10 @@ uint16_t file_suivant(void) {
 
 	for (prio = 0; prio < MAX_TACHES_FILE; ++prio) {
 		if (_queue[prio] != F_VIDE) {
-			id = _file[prio][_queue[prio]];
+			id = _file[prio][_queue[prio]]; // queue te donne la position dans la file
 			_queue[prio] = id;
-			return (id | prio << 3);
+			//return (id | prio << 3);
+			return (id + (prio << 3)); // on remet le prio dans l'id
 		}
 	}
 
@@ -169,23 +181,4 @@ void file_affiche() {
 		}
 		printf("\n");
     }
-}
-
-void file_echange(uint16_t id1, uint16_t id2) {
-	uint16_t index1, index2 = -1;
-	for (int i=0; i<MAX_TACHES_NOYAU; i++) {
-		if(task_identity[i].id == id1) {
-			index1 = i;
-		} 
-		if (task_identity[i].id == id2) {
-			index2 = i;
-		}
-	}
-
-	if (index1 == -1 || index2 == -1) {
-		printf("Erreur dans file_echange : une des taches n'existe pas\n");
-		return;
-	}
-	task_identity[index1].id = id2;
-	task_identity[index2].id = id1;
 }
