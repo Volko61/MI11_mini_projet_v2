@@ -85,7 +85,10 @@ void m_acquire(uint8_t n) {
         m->ref_count++;
     } else {
         uint16_t prio_tc = tc >> 3;
+        printf("prio tc %d \n", prio_tc);
+        
         uint16_t prio_owner = m->owner_id >> 3;
+        printf("prio owner %d \n", prio_owner);
         if (prio_tc < prio_owner) {
         // if (prio_tc > prio_owner) { 
             // la tache en attentente du mutex a une priorité supérieur
@@ -128,7 +131,7 @@ void m_release(uint8_t n) {
         uint16_t tc = noyau_get_tc();
         uint16_t next_task = NO_OWNER_TASK_ID;
         if (m->wait_queue.fifo_taille > 0) {
-            print("fifo attentente mutex taille %d", m->wait_queue.fifo_taille );
+            printf("fifo attentente mutex taille %d \n", m->wait_queue.fifo_taille );
             if (fifo_retire(&(m->wait_queue), &next_task) == 0) {
                  printf("Valeur : %u\n", m->wait_queue);
                 printf("je rentre dans la condition");
