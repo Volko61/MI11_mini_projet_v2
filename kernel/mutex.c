@@ -146,7 +146,7 @@ void m_release(uint8_t n) {
             }
             m->owner_id = next_task;
             m->ref_count = 1;
-            printf("je vais planter là");
+            printf("je vais planter là num tache : %u\n", next_task);
             reveille(next_task);
         } else {
             m->owner_id = NO_OWNER_TASK_ID;
