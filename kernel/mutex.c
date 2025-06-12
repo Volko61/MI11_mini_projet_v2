@@ -6,6 +6,7 @@
 #include "mutex.h"
 #include "fifo.h"
 #include "noyau_prio.h"
+#include "noyau_file_prio.h"
 #include <stdio.h>
 
 #define NO_OWNER_TASK_ID 0xFFFF

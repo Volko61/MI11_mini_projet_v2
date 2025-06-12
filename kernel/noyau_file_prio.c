@@ -22,7 +22,7 @@
  */
 static uint16_t _file[MAX_PRIO][MAX_TACHES_FILE]; //_file[n] = [p0, p3, p4,...,pk] contains all taks of priority of n ordered
 
-static uint16_t _id[MAX_PRIO][MAX_TACHES_FILE];  // _id[prio_task(3 fist bites)][task_number(3 last bites)] = complete_ID 
+uint16_t _id[MAX_PRIO][MAX_TACHES_FILE];  // _id[prio_task(3 fist bites)][task_number(3 last bites)] = complete_ID 
 
 /*
  * index de queue

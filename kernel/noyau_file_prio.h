@@ -27,6 +27,8 @@
  */
 #define F_VIDE      MAX_TACHES_FILE
 
+extern uint16_t _id[MAX_PRIO][MAX_TACHES_FILE];
+
 /*----------------------------------------------------------------------------*
  * prototypes des fonctions de gestion de la file                             *
  * voir le fichier noyau_file.c pour avoir le comportement des fonctions      *
