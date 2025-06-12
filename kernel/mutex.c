@@ -128,6 +128,7 @@ void m_release(uint8_t n) {
         uint16_t tc = noyau_get_tc();
         uint16_t next_task = NO_OWNER_TASK_ID;
         if (m->wait_queue.fifo_taille > 0) {
+            print("fifo attentente mutex taille %d", m->wait_queue.fifo_taille );
             if (fifo_retire(&(m->wait_queue), &next_task) == 0) {
                  printf("Valeur : %u\n", m->wait_queue);
                 printf("je rentre dans la condition");
