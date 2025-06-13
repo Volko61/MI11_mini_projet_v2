@@ -14,7 +14,7 @@ void fifo_init(FIFO *f)
 	f->fifo_taille = f->fifo_queue = f->fifo_tete = 0;
 }
 
-int fifo_ajoute(FIFO *f, uint8_t d)
+int fifo_ajoute(FIFO *f, uint16_t d)
 {
 	if (f->fifo_taille >= TAILLE_FIFO)
 	{
@@ -27,7 +27,7 @@ int fifo_ajoute(FIFO *f, uint8_t d)
 	return(-1);
 }
 
-int fifo_retire(FIFO *f, uint8_t *d)
+int fifo_retire(FIFO *f, uint16_t *d)
 {
 	if (f->fifo_taille == 0)
 	{

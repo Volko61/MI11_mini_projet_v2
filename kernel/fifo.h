@@ -26,7 +26,7 @@
  */
 typedef struct {
     // tableau qui stocke les donnees de la file
-    uint8_t tab[TAILLE_FIFO];
+    uint16_t tab[TAILLE_FIFO];
     // taille de la file
     uint8_t fifo_taille;
     // index de tete de la file
@@ -58,7 +58,7 @@ void fifo_init(FIFO *f);
  * sortie : -1 si succes, O si erreur
  * description : ajoute un element a la file
  */
-int fifo_ajoute(FIFO *f, uint8_t d);
+int fifo_ajoute(FIFO *f, uint16_t d);
 
 /*
  * retire un element a la file
@@ -67,6 +67,6 @@ int fifo_ajoute(FIFO *f, uint8_t d);
  * sortie : -1 si succes, O si erreur
  * description : retire un element de la file
  */
-int fifo_retire(FIFO *f, uint8_t *d);
+int fifo_retire(FIFO *f, uint16_t *d);
 
 #endif
