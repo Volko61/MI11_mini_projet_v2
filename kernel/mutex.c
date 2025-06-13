@@ -148,6 +148,7 @@ void m_release(uint8_t n) {
             uint16_t num_next = tc & 7;
 
             // if (prio_tc < prio_next) {
+            printf("prio : %d num %d id %d \n\n",prio_tc, num_tc, next_task);
             if ((_id[prio_tc][num_tc] == next_task )&&(_id[prio_next][num_next] == tc)){
 
                 file_echange(tc, next_task);
