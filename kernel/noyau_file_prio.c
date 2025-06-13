@@ -119,7 +119,6 @@ void file_retire(uint16_t t) {
 	num_t    = t & 7;
 	q = &_queue[num_file];
 	f = &_file[num_file][0];
-  uint16_t *id = &_id[num_file][0];
 
     if (*q == (f[*q])) {
         *q = F_VIDE;
@@ -136,7 +135,6 @@ void file_retire(uint16_t t) {
             }
             f[*q] = f[f[*q]];
         }
-				id[num_t] = F_VIDE; // Effacer l'identifiant
     }
 }
 
