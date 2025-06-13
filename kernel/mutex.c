@@ -95,7 +95,7 @@ void m_acquire(uint8_t n) {
             // la tache en attentente du mutex a une priorité supérieur
             file_echange(tc, m->owner_id);
             printf("tache en attente du mutex : %d", tc);
-            fifo_ajoute(&(m->wait_queue), tc); // met la tache demandant en attente
+            fifo_ajoute((m->wait_queue), tc); // met la tache demandant en attente
             //noyau_set_status(tc, SUSP);
             // noyau_get_p_tcb(tc)->status = SUSP;  // pk pas 
             dort();
