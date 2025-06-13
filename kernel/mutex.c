@@ -102,7 +102,7 @@ void m_acquire(uint8_t n) {
 
             //file_ajoute(m->owner_id);
 
-            ile_retire(m->owner_id); 
+            file_retire(m->owner_id); 
             schedule();
         } else {
             printf("tache en attente du mutex : %d", tc);
