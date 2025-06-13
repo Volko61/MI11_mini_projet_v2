@@ -80,7 +80,7 @@ void m_acquire(uint8_t n) {
     uint16_t tc = noyau_get_tc();
     if (m->owner_id == NO_OWNER_TASK_ID) {
         m->owner_id = tc;
-        printf("tache qui aquerer le mutex %d",m->owner_id );
+        printf("tache qui aquerer le mutex %d \n",m->owner_id );
         m->ref_count = 1;
     } else if (m->owner_id == tc) {
         m->ref_count++;
