@@ -166,7 +166,7 @@ uint16_t file_suivant(void) {
 			id = _file[prio][_queue[prio]]; //retourne la tête de file
 			_queue[prio] = id; // la tête devient la nouvelle queue 
 			explicite_id = _id[prio][id];
-			return explicite_id;
+			return id;
 		}
 	}
 
