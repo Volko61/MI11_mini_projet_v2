@@ -82,9 +82,13 @@ TACHE	tachedefond(void *arg)
 	 * - Deux tâches qui partagent une section critique au travers du mutex
 	 * - Une tâche de priorité intermédiaire sans mutex.
 	 */
-	active(cree(tacheMutex, 2, (void*) &params[0]));
-	active(cree(tacheAutre, 4,  (void*) &params[1]));
-	active(cree(tacheMutex, 6,  (void*) &params[2]));
+	uint16_t tache_mutex1 = cree(tacheMutex, 2, (void*) &params[0]);
+	uint16_t tache_autre = cree(tacheAutre, 4,  (void*) &params[1]);
+	uint16_t tache_mutex2 = cree(tacheMutex, 6,  (void*) &params[2]);
+
+	active(tache_mutex1);
+	active(tache_autre);
+	active(tache_mutex2);
 
 	while(1);
 	//usart_read();
