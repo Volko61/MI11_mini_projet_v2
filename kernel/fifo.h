@@ -28,15 +28,15 @@ typedef struct {
     // tableau qui stocke les donnees de la file
     uint16_t tab[TAILLE_FIFO];
     // taille de la file
-    uint8_t fifo_taille;
+    uint16_t fifo_taille;
     // index de tete de la file
     // pour rappel, la tete d'une file designe le premier element qui a ete
     // insere
-    uint8_t fifo_tete;
+    uint16_t fifo_tete;
     // index de queue de la file
     // pour rappel, la queue d'une file designe le dernier element qui a ete
     // insere
-    uint8_t fifo_queue;
+    uint16_t fifo_queue;
 } FIFO;
 
 /*----------------------------------------------------------------------------*
