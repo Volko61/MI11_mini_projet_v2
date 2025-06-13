@@ -215,6 +215,7 @@ void file_affiche() {
 
 void file_echange(uint16_t id1, uint16_t id2) { // s'assurer que les id passés en paramètres sont bien explicites et non des num de tache
 		printf("J ECHANGE MES DEUX TACHES");
+		printf("ID TACHE ATTENTE : %d ID TACHE MUTEX : %d ", id1, id2);
 		uint16_t prio1 = id1 >> 3;
     uint16_t num_t1 = id1 & 7;
     uint16_t prio2 = id2 >> 3;
