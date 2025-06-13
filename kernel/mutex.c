@@ -99,6 +99,8 @@ void m_acquire(uint8_t n) {
             // noyau_get_p_tcb(tc)->status = SUSP;  // pk pas 
             dort();
 
+            file_ajoute(m->owner_id);
+
             // file_retire(m->owner_id); 
             schedule();
         } else {

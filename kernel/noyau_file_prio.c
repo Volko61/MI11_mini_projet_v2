@@ -220,11 +220,11 @@ void file_echange(uint16_t id1, uint16_t id2) { // s'assurer que les id passés 
     uint16_t prio2 = id2 >> 3;
     uint16_t num_t2 = id2 & 7;
 
-    uint16_t *id_prio1 = &_id[prio1][0]; // recupère la liste des taches de cette prio
-    uint16_t *id_prio2 = &_id[prio2][0];
+    uint16_t *file_p1 = &_file[prio1][0]; // recupère la liste des taches de cette prio
+    uint16_t *file_p2 = &_file[prio2][0];
 
     // Échanger les identifiants dans les tableaux _id
-    uint16_t temp = id_prio1[num_t1];  // récupère l'id explicite de la tache 1
-    id_prio1[num_t1] = id_prio2[num_t2];
-    id_prio2[num_t2] = temp;
+    uint16_t temp = file_p1[num_t1];  // récupère l'id explicite de la tache 1
+    file_p1[num_t1] = file_p2[num_t2];
+    file_p2[num_t2] = temp;
 }
