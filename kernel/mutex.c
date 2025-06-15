@@ -95,14 +95,14 @@ void m_acquire(uint8_t n) {
             // la tache en attentente du mutex a une priorité supérieur
             file_echange(tc, m->owner_id);
             printf("tache en attente du mutex : %d", tc);
-            fifo_ajoute(&(m->wait_queue), tc); // met la tache demandant en attente
+            //fifo_ajoute(&(m->wait_queue), tc); // met la tache demandant en attente
             //noyau_set_status(tc, SUSP);
-            noyau_get_p_tcb(tc)->status = SUSP;  // pk pas 
-            // dort();
+            noyau_get_p_tcb(tc)->status = SUSP;  // pk pas
+            //dort();
 
-            file_ajoute(m->owner_id);
+            //file_ajoute(m->owner_id);
 
-            // file_retire(m->owner_id); 
+            file_retire(m->owner_id);
             schedule();
         } else {
             printf("tache en attente du mutex : %d", tc);
@@ -114,6 +114,7 @@ void m_acquire(uint8_t n) {
 }
 
 void m_release(uint8_t n) {
+	printf("JE SUIS DANS RELEASE\n\n");
     if (n >= MAX_MUTEX) {
         printf("Erreur : index de mutex invalide (%d)\n", n);
         noyau_exit();
@@ -150,9 +151,9 @@ void m_release(uint8_t n) {
             uint16_t prio_next = next_task >> 3;
             uint16_t num_next = tc & 7;
 
-            // if (prio_tc < prio_next) {
+            if (next_task == tc) {
             printf("prio : %d num %d id %d \n\n",prio_tc, num_tc, next_task);
-            if ((_id[prio_tc][num_tc] == next_task )&&(_id[prio_next][num_next] == tc)){
+           // if ((_id[prio_tc][num_tc] == next_task )&&(_id[prio_next][num_next] == tc)){
 
                 file_echange(tc, next_task);
                 // noyau_get_p_tcb(next_task)->status = EXEC;
