@@ -46,6 +46,7 @@ TACHE tacheMutex(void *arg)
 		delay(p->start_delay);
 		m_acquire(mutex);
 		for (volatile int i = 0; i < p->work_to_do; i++) continue;
+		printf("ici");
 		m_release(mutex);
 	}
 }

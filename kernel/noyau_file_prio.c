@@ -72,7 +72,7 @@ void file_ajoute(uint16_t n) {
 			f[*q] = num_t; // l'ancienne queue pointe sur la nouvelle tache ajoutée
 		}
 	
-		id[num_t] = n;
+	id[num_t] = n;
     *q = num_t;
 }
 
@@ -163,10 +163,11 @@ uint16_t file_suivant(void) {
 
 	for (prio = 0; prio < MAX_TACHES_FILE; ++prio) {
 		if (_queue[prio] != F_VIDE) {
-			id = _file[prio][_queue[prio]]; //retourne la tête de file
+			id = _file[prio][_queue[prio]]; //retourne la tête de file la position dans la fille
 			_queue[prio] = id; // la tête devient la nouvelle queue 
 			explicite_id = _id[prio][id];
-			return id;
+			printf("NEXT TASK SUIV : %d", explicite_id);
+			return explicite_id;
 		}
 	}
 
@@ -214,15 +215,15 @@ void file_affiche() {
 
 
 void file_echange(uint16_t id1, uint16_t id2) { // s'assurer que les id passés en paramètres sont bien explicites et non des num de tache
-		printf("J ECHANGE MES DEUX TACHES \n");
+		//printf("J ECHANGE MES DEUX TACHES \n");
 		printf("ID TACHE ATTENTE : %d ID TACHE MUTEX : %d \n", id1, id2);
 		uint16_t prio1 = id1 >> 3;
     uint16_t num_t1 = id1 & 7;
     uint16_t prio2 = id2 >> 3;
     uint16_t num_t2 = id2 & 7;
 
-    uint16_t *file_p1 = &_file[prio1][0]; // recupère la liste des taches de cette prio
-    uint16_t *file_p2 = &_file[prio2][0];
+    uint16_t *file_p1 = &_id[prio1][0]; // recupère la liste des taches de cette prio
+    uint16_t *file_p2 = &_id[prio2][0];
 
     // Échanger les identifiants dans les tableaux _id
     uint16_t temp = file_p1[num_t1];  // récupère l'id explicite de la tache 1
