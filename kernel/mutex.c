@@ -81,7 +81,7 @@ void m_acquire(uint8_t n) {
     _lock_();
     uint16_t tc = noyau_get_tc();
     if (m->owner_id == NO_OWNER_TASK_ID) {
-        // la tâche courante récupère le mutex pour la première fois
+        // la tache courante récupère le mutex pour la première fois
         m->owner_id = tc;
         m->ref_count = 1;
     } else if (m->owner_id == tc) {
@@ -96,16 +96,16 @@ void m_acquire(uint8_t n) {
         if (prio_tc < prio_owner) {
             // la tache en attentente du mutex a une priorité supérieur
             file_echange(tc, m->owner_id);
-            fifo_ajoute(&(m->wait_queue), tc); // met la tache demandant en attente
-            //noyau_set_status(tc, SUSP);
-            noyau_get_p_tcb(tc)->status = SUSP;  // pk pas
-            //dort();
+            fifo_ajoute(&(m->wait_queue), tc); 
+            // suspend la tâche en attente du mutex
+            noyau_get_p_tcb(tc)->status = SUSP;
 
-            //file_ajoute(m->owner_id);
-
+            // retire la tache propriétaire du mutex de la file d'attente 
+            // car les tâches ont échangé leurs id
             file_retire(m->owner_id);
             schedule();
         } else {
+            // la tache n'a pas de priorité supérieure
             fifo_ajoute(&(m->wait_queue), tc);
             dort();
         }
@@ -121,18 +121,23 @@ void m_release(uint8_t n) {
 
     register MUTEX *m = &_mutex[n];
     if (m->ref_count == -1) {
+        // le mutex n'a pas été créé car ref_count == -1
         printf("Erreur : mutex %d non créé\n", n);
         noyau_exit();
     }
     if (m->owner_id != noyau_get_tc()) {
+        // la tache courante nest pas propriétaire du mutex
+        printf("Erreur : la tâche %d n'est pas propriétaire du mutex %d\n", noyau_get_tc(), n);
         noyau_exit();
     }
 
     _lock_();
     m->ref_count--;
     if (m->ref_count == 0) {
+        // le mutex est libéré
         uint16_t tc = noyau_get_tc();
         uint16_t next_task = NO_OWNER_TASK_ID;
+        // on vérifie s'il y a des tâches en attente
         if (m->wait_queue.fifo_taille > 0) {
             if (fifo_retire(&(m->wait_queue), &next_task) == 0) {
                 _unlock_();
@@ -140,15 +145,12 @@ void m_release(uint8_t n) {
             }
             uint16_t prio_tc = tc >> 3;
             uint16_t num_tc = tc & 7;
-
-            uint16_t prio_next = next_task >> 3;
-            uint16_t num_next = tc & 7;
-            uint16_t fake_id = _id[prio_tc][num_tc];
-            if (next_task == fake_id) {
-           // if ((_id[prio_tc][num_tc] == next_task )&&(_id[prio_next][num_next] == tc)){
+            uint16_t reversed_id = _id[prio_tc][num_tc];
+            if (next_task == reversed_id) {
+                // la tâche anciennement détentrice du mutex avait inversé son id avec la tâche en attente
                 file_echange(tc, next_task);
-                // noyau_get_p_tcb(next_task)->status = EXEC;
             }
+            // la tâche courante récupère le mutex
             m->owner_id = next_task;
             m->ref_count = 1;
             reveille(next_task);
@@ -177,6 +179,7 @@ void m_destroy(uint8_t n) {
 
     _lock_();
     fifo_init(&(m->wait_queue));
+    // désactive le mutex
     m->ref_count = -1;
     m->owner_id = NO_OWNER_TASK_ID;
     _unlock_();
