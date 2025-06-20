@@ -63,7 +63,7 @@ void file_ajoute(uint16_t n) {
 	num_t = n & 7;
 	q = &_queue[num_file];  // queue de la file de priorité associées à la tache
 	f = &_file[num_file][0];  // récupère le prointeur sur la preimère position de la file
-	uint16_t *id = &_id[num_file][0];
+	uint16_t *id = &_id[num_file][0]; 
 
     if (*q == F_VIDE) {
         f[num_t] = num_t; // la tache pointe sur elle même, elle est la queue et la tete
@@ -71,7 +71,7 @@ void file_ajoute(uint16_t n) {
 			f[num_t] = f[*q]; // la nouvelle tache devient queue et pointe sur la tête
 			f[*q] = num_t; // l'ancienne queue pointe sur la nouvelle tache ajoutée
 		}
-	
+	// on ajoute désormais l'identifiant explicite de la tache dans le tableau d'inversion
 	id[num_t] = n;
     *q = num_t;
 }
@@ -83,34 +83,6 @@ void file_ajoute(uint16_t n) {
  * description : retire la tache t de la file. L'ordre de la file n'est pas
                  modifie
  */
-// void file_retire(uint16_t t) {
-//     uint16_t num_file = t >> 3;
-//     uint16_t num_t = t & 7;
-//     uint16_t *q = &_queue[num_file];
-//     uint16_t *f = &_file[num_file][0];
-//     uint16_t *id = &_id[num_file][0];
-
-//     if (*q == F_VIDE) {
-//         return; // File vide, rien à faire
-//     }
-
-//     if (*q == num_t) {
-//         *q = f[*q];
-//         id[num_t] = F_VIDE; // Effacer l'identifiant
-//         if (*q == num_t) {
-//             *q = F_VIDE; // Dernière tâche retirée
-//         }
-//     } else {
-//         uint16_t prev = *q;
-//         while (f[prev] != num_t && f[prev] != F_VIDE) {
-//             prev = f[prev];
-//         }
-//         if (f[prev] == num_t) {
-//             f[prev] = f[num_t];
-//             id[num_t] = F_VIDE; // Effacer l'identifiant
-//         }
-//     }
-// }
 
 void file_retire(uint16_t t) {
 	uint16_t num_file, num_t, *q, *f;
@@ -144,17 +116,6 @@ void file_retire(uint16_t t) {
  * sortie : numero de la tache a activer
  * description : queue pointe sur la tache suivante
  */
-// uint16_t file_suivant(void) {
-//     uint16_t prio;
-//     for (prio = 0; prio < MAX_PRIO; ++prio) {
-//         if (_queue[prio] != F_VIDE) {
-//             uint16_t id = _id[prio][_queue[prio]];
-// 			_queue[prio] = _file[prio][_queue[prio]];
-//             return id; // Retourner l'identifiant explicite
-//         }
-//     }
-//     return MAX_TACHES_NOYAU;
-// }
 
 uint16_t file_suivant(void) {
 	uint16_t prio;
@@ -163,10 +124,12 @@ uint16_t file_suivant(void) {
 
 	for (prio = 0; prio < MAX_TACHES_FILE; ++prio) {
 		if (_queue[prio] != F_VIDE) {
+            // récupère la prochaine tâche courante 
 			id = _file[prio][_queue[prio]]; //retourne la tête de file la position dans la fille
 			_queue[prio] = id; // la tête devient la nouvelle queue 
+
+            // à partir de l'id de la tache, on retourne l'id explicite dans la liste d'inversion
 			explicite_id = _id[prio][id];
-			printf("NEXT TASK SUIV : %d", explicite_id);
 			return explicite_id;
 		}
 	}
@@ -215,18 +178,17 @@ void file_affiche() {
 
 
 void file_echange(uint16_t id1, uint16_t id2) { // s'assurer que les id passés en paramètres sont bien explicites et non des num de tache
-		//printf("J ECHANGE MES DEUX TACHES \n");
-		printf("ID TACHE ATTENTE : %d ID TACHE MUTEX : %d \n", id1, id2);
-		uint16_t prio1 = id1 >> 3;
+	uint16_t prio1 = id1 >> 3;
     uint16_t num_t1 = id1 & 7;
     uint16_t prio2 = id2 >> 3;
     uint16_t num_t2 = id2 & 7;
 
-    uint16_t *file_p1 = &_id[prio1][0]; // recupère la liste des taches de cette prio
-    uint16_t *file_p2 = &_id[prio2][0];
+    // recupère la liste des taches de ces priorités
+    uint16_t *file_id_p1 = &_id[prio1][0]; 
+    uint16_t *file_id_p2 = &_id[prio2][0];
 
     // Échanger les identifiants dans les tableaux _id
-    uint16_t temp = file_p1[num_t1];  // récupère l'id explicite de la tache 1
-    file_p1[num_t1] = file_p2[num_t2];
-    file_p2[num_t2] = temp;
+    uint16_t temp = file_id_p1[num_t1];  
+    file_id_p1[num_t1] = file_id_p2[num_t2];
+    file_id_p2[num_t2] = temp;
 }

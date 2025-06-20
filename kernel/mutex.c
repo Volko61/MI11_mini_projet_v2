@@ -54,6 +54,7 @@ uint8_t m_create(void) {
     }
     if (n < MAX_MUTEX) {
         fifo_init(&(m->wait_queue));
+        // met le ref_count à 0 pour indiquer que le mutex est disponible
         m->ref_count = 0;
         m->owner_id = NO_OWNER_TASK_ID;
     } else {
@@ -72,6 +73,7 @@ void m_acquire(uint8_t n) {
 
     register MUTEX *m = &_mutex[n]; // accède au mutex demandé dans le tableau des mutexs
     if (m->ref_count == -1) {
+        // le mutex n'a pas été créé car ref_count == -1, il n'est pas disponible
         printf("Erreur : mutex %d non créé\n", n);
         noyau_exit();
     }
@@ -79,25 +81,22 @@ void m_acquire(uint8_t n) {
     _lock_();
     uint16_t tc = noyau_get_tc();
     if (m->owner_id == NO_OWNER_TASK_ID) {
+        // la tâche courante récupère le mutex pour la première fois
         m->owner_id = tc;
-        printf("tache qui aquerer le mutex %d \n",m->owner_id );
         m->ref_count = 1;
     } else if (m->owner_id == tc) {
+        // la tâche courante est déjà propriétaire du mutex
         m->ref_count++;
     } else {
-    	printf("je RENTRE LA\n");
 
         uint16_t prio_tc = tc >> 3;
-        printf("prio tc %d \n", prio_tc);
         
         uint16_t prio_owner = m->owner_id >> 3;
-        printf("prio owner %d \n", prio_owner);
+        // dans le sujet la tâche prioritaire à la valeur numérique la plus basse
         if (prio_tc < prio_owner) {
-        // if (prio_tc > prio_owner) { 
             // la tache en attentente du mutex a une priorité supérieur
             file_echange(tc, m->owner_id);
-            printf("tache en attente du mutex : %d", tc);
-            //fifo_ajoute(&(m->wait_queue), tc); // met la tache demandant en attente
+            fifo_ajoute(&(m->wait_queue), tc); // met la tache demandant en attente
             //noyau_set_status(tc, SUSP);
             noyau_get_p_tcb(tc)->status = SUSP;  // pk pas
             //dort();
@@ -107,7 +106,6 @@ void m_acquire(uint8_t n) {
             file_retire(m->owner_id);
             schedule();
         } else {
-            printf("tache en attente du mutex : %d", tc);
             fifo_ajoute(&(m->wait_queue), tc);
             dort();
         }
@@ -116,7 +114,6 @@ void m_acquire(uint8_t n) {
 }
 
 void m_release(uint8_t n) {
-	printf("JE SUIS DANS RELEASE\n\n");
     if (n >= MAX_MUTEX) {
         printf("Erreur : index de mutex invalide (%d)\n", n);
         noyau_exit();
@@ -128,8 +125,6 @@ void m_release(uint8_t n) {
         noyau_exit();
     }
     if (m->owner_id != noyau_get_tc()) {
-        printf("Erreur : la tâche %d ne détient pas le mutex %d (propriétaire : %d)\n",
-               noyau_get_tc(), n, m->owner_id);
         noyau_exit();
     }
 
@@ -139,11 +134,7 @@ void m_release(uint8_t n) {
         uint16_t tc = noyau_get_tc();
         uint16_t next_task = NO_OWNER_TASK_ID;
         if (m->wait_queue.fifo_taille > 0) {
-            printf("fifo attentente mutex taille %d \n", m->wait_queue.fifo_taille );
             if (fifo_retire(&(m->wait_queue), &next_task) == 0) {
-                 printf("Valeur : %d\n", m->wait_queue);
-                printf("je rentre dans la condition");
-                printf("Erreur : échec de fifo_retire pour le mutex %d\n", n);
                 _unlock_();
                 noyau_exit();
             }
@@ -154,16 +145,12 @@ void m_release(uint8_t n) {
             uint16_t num_next = tc & 7;
             uint16_t fake_id = _id[prio_tc][num_tc];
             if (next_task == fake_id) {
-            printf("prio : %d num %d id %d \n\n",prio_tc, num_tc, next_task);
            // if ((_id[prio_tc][num_tc] == next_task )&&(_id[prio_next][num_next] == tc)){
-printf("\n\”JE SUIS EN PLEINE RESTITUTION!! \n\n\n");
                 file_echange(tc, next_task);
                 // noyau_get_p_tcb(next_task)->status = EXEC;
             }
             m->owner_id = next_task;
             m->ref_count = 1;
-            printf("je vais planter là num tache : %u\n", next_task);
-
             reveille(next_task);
         } else {
             m->owner_id = NO_OWNER_TASK_ID;
